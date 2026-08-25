@@ -2,8 +2,13 @@ name: Build CoreELEC 22 Homatics Box R 4K Plus
 
 on:
   workflow_dispatch:
+  push:
+    branches: [coreelec-22]
   schedule:
     - cron: '0 4 * * 0'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,32 +19,78 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: coreelec-22
+          fetch-depth: 1
 
       - name: Install build dependencies
         run: |
           sudo apt update
-          sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make ncurses-dev python3 unzip wget xz-utils zstd
+          sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make mtools ncurses-dev python3 sfdisk unzip wget xz-utils zstd
+
+      - name: Stage verified dovi.ko
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOVI_URL="https://github.com/samtheruby/coreelec-android-dualboot-twilight/releases/download/v1.3.1/partB-installer-box-dist.zip"
+          TMP_ZIP="${RUNNER_TEMP}/dovi-source.zip"
+          curl -fL --retry 3 --retry-all-errors "$DOVI_URL" -o "$TMP_ZIP"
+          DOVI_PATH="$(unzip -Z1 "$TMP_ZIP" | grep -E '(^|/)dovi\.ko$' | head -n1)"
+          test -n "$DOVI_PATH"
+          unzip -p "$TMP_ZIP" "$DOVI_PATH" > projects/Amlogic-ce/packages/dovi/files/dovi.ko
+          test -s projects/Amlogic-ce/packages/dovi/files/dovi.ko
+          echo "dovi.ko sha256:"
+          sha256sum projects/Amlogic-ce/packages/dovi/files/dovi.ko
+          test "$(sha256sum projects/Amlogic-ce/packages/dovi/files/dovi.ko | cut -d' ' -f1)" = "f6c26659a255447685ceac9441e399c999b1fae9c6435c48d70e14a14dd7f8f7"
 
       - name: Prepare build config
         run: |
           echo "CoreELEC 22 Homatics Box R 4K Plus"
-          echo "Project: Amlogic-no"
-          echo "Device: Generic"
+          echo "Project: Amlogic-ce"
+          echo "Device: Amlogic-no"
+          echo "Architecture: aarch64"
           echo "DTB: sc2_s905x4_sei_smb_280.dtb"
 
       - name: Build CoreELEC image
         run: |
-          make image PROJECT=Amlogic-no DEVICE=Generic ARCH=aarch64
+          set -euo pipefail
+          PROJECT=Amlogic-ce DEVICE=Amlogic-no ARCH=aarch64 make image
+
+      - name: Make Homatics DTB self-contained
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="$(find target -type f -name 'CoreELEC-Amlogic-no.aarch64-22.0-Piers*Generic.img.gz' -print -quit)"
+          test -n "$IMAGE"
+          gunzip -c "$IMAGE" > "${RUNNER_TEMP}/coreelec.img"
+          OFFSET="$(python3 - <<'PY'
+          import json, subprocess
+          with open('/tmp/sfdisk.json', 'w') as f:
+              pass
+          data=json.loads(subprocess.check_output(['sfdisk','-J',__import__('os').environ['IMG']]))
+          print(min(p['start'] for p in data['partitiontable']['partitions']) * data['partitiontable'].get('sectorsize',512))
+          PY
+          )" IMG="${RUNNER_TEMP}/coreelec.img"
+          export MTOOLS_SKIP_CHECK=1
+          mcopy -i "${RUNNER_TEMP}/coreelec.img@@${OFFSET}" '::device_trees/sc2_s905x4_sei_smb_280.dtb' "${RUNNER_TEMP}/dtb.img"
+          test "$(od -A n -t x1 -N 4 "${RUNNER_TEMP}/dtb.img" | tr -d ' \n')" = "d00dfeed"
+          mcopy -i "${RUNNER_TEMP}/coreelec.img@@${OFFSET}" "${RUNNER_TEMP}/dtb.img" '::dtb.img'
+          gzip -n -6 -c "${RUNNER_TEMP}/coreelec.img" > "${IMAGE}.homatics.tmp"
+          mv -f "${IMAGE}.homatics.tmp" "${IMAGE}"
 
       - name: Prepare release name
         run: |
-          echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date +%Y%m%d)" >> "$GITHUB_ENV"
 
       - name: Package firmware
+        shell: bash
         run: |
+          set -euo pipefail
+          IMAGE="$(find target -type f -name 'CoreELEC-Amlogic-no.aarch64-22.0-Piers*Generic.img.gz' -print -quit)"
+          test -n "$IMAGE"
           mkdir -p release
-          cp target/* release/ || true
-          sha256sum release/* > release/SHA256SUMS.txt || true
+          cp "$IMAGE" "release/CoreELEC-Homatics-4K-Plus-${BUILD_DATE}.img.gz"
+          sha256sum release/CoreELEC-Homatics-4K-Plus-${BUILD_DATE}.img.gz > release/SHA256SUMS.txt
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -52,4 +103,7 @@ jobs:
         with:
           tag_name: homatics-${{ env.BUILD_DATE }}
           name: CoreELEC Homatics 4K Plus ${{ env.BUILD_DATE }}
+          generate_release_notes: true
+          make_latest: true
+          overwrite_files: true
           files: release/*
