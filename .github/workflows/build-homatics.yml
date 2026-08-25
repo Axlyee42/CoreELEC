@@ -28,52 +28,9 @@ jobs:
           sudo apt update
           sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make mtools ncurses-dev python3 unzip util-linux wget xz-utils zstd xfonts-utils rdfind libparse-yapp-perl gperf xsltproc libxml-parser-perl patchutils lzop
 
-      - name: Fetch and verify FEL dovi.ko
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p projects/Amlogic-ce/packages/dovi/files
-          python3 - <<'PY'
-          import html
-          import json
-          import re
-          import urllib.request
-
-          topic = json.load(urllib.request.urlopen('https://discourse.coreelec.org/t/58631.json'))
-          wanted = '5.15_2.6_dovi_patched_fix_fel.ko'
-          found = None
-
-          for post in topic.get('post_stream', {}).get('posts', []):
-              cooked = html.unescape(post.get('cooked', ''))
-              if wanted not in cooked:
-                  continue
-              m = re.search(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>[^<]*' + re.escape(wanted), cooked, re.I)
-              if m:
-                  found = m.group(1)
-                  break
-              m = re.search(r'href=["\']([^"\']+)["\'][^>]*[^>]*' + re.escape(wanted), cooked, re.I)
-              if m:
-                  found = m.group(1)
-                  break
-
-          if not found:
-              raise SystemExit('Could not find the exact dovi.ko attachment in CoreELEC forum topic 58631')
-
-          if found.startswith('/'):
-              found = 'https://discourse.coreelec.org' + found
-          print(found)
-          open('/tmp/dovi-url', 'w').write(found)
-          PY
-
-          DOVI_URL="$(cat /tmp/dovi-url)"
-          curl -fL --retry 5 --retry-all-errors "$DOVI_URL" -o projects/Amlogic-ce/packages/dovi/files/dovi.ko
-          test -s projects/Amlogic-ce/packages/dovi/files/dovi.ko
-          ACTUAL_SHA256="$(sha256sum projects/Amlogic-ce/packages/dovi/files/dovi.ko | cut -d' ' -f1)"
-          echo "dovi.ko SHA256: $ACTUAL_SHA256"
-          test "$ACTUAL_SHA256" = "f6c26659a255447685ceac9441e399c999b1fae9c6435c48d70e14a14dd7f8f7"
-
       - name: Prepare build config
         run: |
+          set -euo pipefail
           echo "CoreELEC 22 Homatics Box R 4K Plus"
           echo "Project: Amlogic-ce"
           echo "Device: Amlogic-no"
@@ -85,7 +42,7 @@ jobs:
           set -euo pipefail
           PROJECT=Amlogic-ce DEVICE=Amlogic-no ARCH=aarch64 make image
 
-      - name: Make Homatics DTB and dovi self-contained
+      - name: Make Homatics DTB self-contained
         shell: bash
         run: |
           set -euo pipefail
@@ -100,10 +57,6 @@ jobs:
           mcopy -i "${RAW}@@${OFFSET}" '::device_trees/sc2_s905x4_sei_smb_280.dtb' "${RUNNER_TEMP}/dtb.img"
           test "$(od -A n -t x1 -N 4 "${RUNNER_TEMP}/dtb.img" | tr -d ' \n')" = "d00dfeed"
           mcopy -i "${RAW}@@${OFFSET}" "${RUNNER_TEMP}/dtb.img" '::dtb.img'
-
-          cp projects/Amlogic-ce/packages/dovi/files/dovi.ko "${RUNNER_TEMP}/dovi.ko"
-          test "$(sha256sum "${RUNNER_TEMP}/dovi.ko" | cut -d' ' -f1)" = "f6c26659a255447685ceac9441e399c999b1fae9c6435c48d70e14a14dd7f8f7"
-          mcopy -i "${RAW}@@${OFFSET}" "${RUNNER_TEMP}/dovi.ko" '::dovi.ko'
 
           gzip -n -6 -c "$RAW" > "${IMAGE}.homatics.tmp"
           mv -f "${IMAGE}.homatics.tmp" "$IMAGE"
