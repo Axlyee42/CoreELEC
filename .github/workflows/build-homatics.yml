@@ -1,0 +1,39 @@
+name: Build CoreELEC 22 Homatics Box R 4K Plus
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 0'
+
+jobs:
+  build:
+    name: Build Homatics S905X4-K
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make ncurses-dev python3 unzip wget xz-utils zstd
+
+      - name: Build CoreELEC image
+        run: |
+          echo 'Homatics Box R 4K Plus build initialized'
+          echo 'Target: S905X4-K'
+          echo 'DTB: sc2_s905x4_sei_smb_280.dtb'
+          make image PROJECT=Amlogic-ng DEVICE=Generic ARCH=aarch64
+
+      - name: Package dovi module
+        run: |
+          mkdir -p target/dovi
+          echo 'dovi.ko integration placeholder'
+
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoreELEC-Homatics-S905X4
+          path: target/*
