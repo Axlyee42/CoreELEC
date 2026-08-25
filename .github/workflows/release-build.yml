@@ -1,0 +1,33 @@
+name: Build and Release Homatics CoreELEC
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set build date
+        id: date
+        run: echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+
+      - name: Build CoreELEC
+        run: |
+          echo "这里调用 CoreELEC 22 Amlogic-no Homatics 编译流程"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: homatics-${{ steps.date.outputs.date }}
+          name: CoreELEC Homatics 4K Plus ${{ steps.date.outputs.date }}
+          files: |
+            target/*.img.gz
