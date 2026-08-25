@@ -26,7 +26,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt update
-          sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make mtools ncurses-dev python3 sfdisk unzip wget xz-utils zstd
+          sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make mtools ncurses-dev python3 unzip util-linux wget xz-utils zstd
 
       - name: Stage verified dovi.ko
         shell: bash
