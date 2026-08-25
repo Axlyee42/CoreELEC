@@ -1,0 +1,13 @@
+[Unit]
+Description=Load patched Dolby Vision FEL kernel module
+DefaultDependencies=no
+After=local-fs.target
+Before=kodi.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/load-dovi.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
