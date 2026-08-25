@@ -39,7 +39,6 @@ jobs:
           test -n "$DOVI_PATH"
           unzip -p "$TMP_ZIP" "$DOVI_PATH" > projects/Amlogic-ce/packages/dovi/files/dovi.ko
           test -s projects/Amlogic-ce/packages/dovi/files/dovi.ko
-          echo "dovi.ko sha256:"
           sha256sum projects/Amlogic-ce/packages/dovi/files/dovi.ko
           test "$(sha256sum projects/Amlogic-ce/packages/dovi/files/dovi.ko | cut -d' ' -f1)" = "f6c26659a255447685ceac9441e399c999b1fae9c6435c48d70e14a14dd7f8f7"
 
@@ -62,21 +61,15 @@ jobs:
           set -euo pipefail
           IMAGE="$(find target -type f -name 'CoreELEC-Amlogic-no.aarch64-22.0-Piers*Generic.img.gz' -print -quit)"
           test -n "$IMAGE"
-          gunzip -c "$IMAGE" > "${RUNNER_TEMP}/coreelec.img"
-          OFFSET="$(python3 - <<'PY'
-          import json, subprocess
-          with open('/tmp/sfdisk.json', 'w') as f:
-              pass
-          data=json.loads(subprocess.check_output(['sfdisk','-J',__import__('os').environ['IMG']]))
-          print(min(p['start'] for p in data['partitiontable']['partitions']) * data['partitiontable'].get('sectorsize',512))
-          PY
-          )" IMG="${RUNNER_TEMP}/coreelec.img"
+          RAW="${RUNNER_TEMP}/coreelec.img"
+          gunzip -c "$IMAGE" > "$RAW"
+          OFFSET="$(IMG="$RAW" python3 -c 'import json,os,subprocess; d=json.loads(subprocess.check_output(["sfdisk","-J",os.environ["IMG"]])); print(min(p["start"] for p in d["partitiontable"]["partitions"])*d["partitiontable"].get("sectorsize",512))')"
           export MTOOLS_SKIP_CHECK=1
-          mcopy -i "${RUNNER_TEMP}/coreelec.img@@${OFFSET}" '::device_trees/sc2_s905x4_sei_smb_280.dtb' "${RUNNER_TEMP}/dtb.img"
+          mcopy -i "${RAW}@@${OFFSET}" '::device_trees/sc2_s905x4_sei_smb_280.dtb' "${RUNNER_TEMP}/dtb.img"
           test "$(od -A n -t x1 -N 4 "${RUNNER_TEMP}/dtb.img" | tr -d ' \n')" = "d00dfeed"
-          mcopy -i "${RUNNER_TEMP}/coreelec.img@@${OFFSET}" "${RUNNER_TEMP}/dtb.img" '::dtb.img'
-          gzip -n -6 -c "${RUNNER_TEMP}/coreelec.img" > "${IMAGE}.homatics.tmp"
-          mv -f "${IMAGE}.homatics.tmp" "${IMAGE}"
+          mcopy -i "${RAW}@@${OFFSET}" "${RUNNER_TEMP}/dtb.img" '::dtb.img'
+          gzip -n -6 -c "$RAW" > "${IMAGE}.homatics.tmp"
+          mv -f "${IMAGE}.homatics.tmp" "$IMAGE"
 
       - name: Prepare release name
         run: |
@@ -90,7 +83,7 @@ jobs:
           test -n "$IMAGE"
           mkdir -p release
           cp "$IMAGE" "release/CoreELEC-Homatics-4K-Plus-${BUILD_DATE}.img.gz"
-          sha256sum release/CoreELEC-Homatics-4K-Plus-${BUILD_DATE}.img.gz > release/SHA256SUMS.txt
+          sha256sum "release/CoreELEC-Homatics-4K-Plus-${BUILD_DATE}.img.gz" > release/SHA256SUMS.txt
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
