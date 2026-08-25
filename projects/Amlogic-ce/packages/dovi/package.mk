@@ -25,4 +25,7 @@ make_target() {
 makeinstall_target() {
   install -Dm0644 "${PKG_BUILD}/dovi.ko" "${INSTALL}/usr/lib/modules/dovi.ko"
   install -Dm0755 "${PKG_DIR}/files/load-dovi.sh" "${INSTALL}/usr/bin/load-dovi.sh"
+  install -Dm0644 "${PKG_DIR}/files/dovi-load.service" "${INSTALL}/usr/lib/systemd/system/dovi-load.service"
+  mkdir -p "${INSTALL}/etc/systemd/system/multi-user.target.wants"
+  ln -sf /usr/lib/systemd/system/dovi-load.service "${INSTALL}/etc/systemd/system/multi-user.target.wants/dovi-load.service"
 }
