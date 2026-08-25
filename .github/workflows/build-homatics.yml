@@ -20,32 +20,23 @@ jobs:
           sudo apt update
           sudo apt install -y bc bison build-essential ccache curl flex gawk gcc git make ncurses-dev python3 unzip wget xz-utils zstd
 
-      - name: Prepare Dolby Vision module
+      - name: Prepare build config
         run: |
-          mkdir -p packages/dovi/files
-          # Place 5.15_2.6_dovi_patched_fix_fel.ko here
-          # Rename to dovi.ko before build
-          if [ -f packages/dovi/files/5.15_2.6_dovi_patched_fix_fel.ko ]; then
-            mv packages/dovi/files/5.15_2.6_dovi_patched_fix_fel.ko packages/dovi/files/dovi.ko
-          fi
+          echo "CoreELEC 22 Homatics Box R 4K Plus"
+          echo "Project: Amlogic-no"
+          echo "Device: Generic"
+          echo "DTB: sc2_s905x4_sei_smb_280.dtb"
 
       - name: Build CoreELEC image
         run: |
-          echo 'Homatics Box R 4K Plus build initialized'
-          echo 'Target: S905X4-K'
-          echo 'DTB: sc2_s905x4_sei_smb_280.dtb'
-          echo 'Dolby Vision FEL module: enabled'
-          make image PROJECT=Amlogic-no DEVICE=Homatics ARCH=aarch64
+          make image PROJECT=Amlogic-no DEVICE=Generic ARCH=aarch64
 
-      - name: Inject Dolby Vision module
+      - name: Prepare release name
         run: |
-          mkdir -p target/dovi
-          if [ -f packages/dovi/files/dovi.ko ]; then
-            cp packages/dovi/files/dovi.ko target/dovi/
-          fi
+          echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
 
       - name: Upload image
         uses: actions/upload-artifact@v4
         with:
-          name: CoreELEC-Homatics-S905X4-DV
+          name: CoreELEC-Homatics-4K-Plus-${{ env.BUILD_DATE }}
           path: target/*
